@@ -35,14 +35,14 @@ We started with a comprehensive test suite designed to fail completely before an
 **Initial State:** Target file contained only "test test" (9 bytes)
 **Red Phase Result:** 🔴 **8/8 tests failed** (100% failure rate)
 
-![Red Phase Results](/Users/jacobmccarran_ax/Desktop/Screenshot%202025-09-25%20at%2012.58.01%20PM.png)
+![Red Phase Results](red.png)
 *Screenshot showing all 8 tests failing in the Red phase*
 
 ### Phase 2: GREEN Phase - Make Tests Pass ✅
 
 After PDF to Markdown conversion using Axiomatic Documents MCP:
 
-![Green Phase Results - Part 1](/Users/jacobmccarran_ax/Desktop/Screenshot%202025-09-25%20at%2012.37.04%20PM.png)
+![Green Phase Results - Part 1](green_part1.png)
 *Initial testing after PDF conversion showed 4/8 tests passing. The agent then went through and fixed formatting issues.*
 
 **Green Phase Result:** 🟢 **7/8 tests passing** (87.5% success rate)
@@ -59,10 +59,10 @@ After PDF to Markdown conversion using Axiomatic Documents MCP:
 **Remaining Issue:**
 - ❌ Mathematical content at 1.6% vs 2.0% threshold (borderline metric)
 
-![Green Phase Results - Part 1](/Users/jacobmccarran_ax/Desktop/Screenshot%202025-09-25%20at%2012.37.04%20PM.png)
+![Green Phase Results - Part 1](green_part1.png)
 *Green Phase Part 1: Detailed test results showing comprehensive diagnostics*
 
-![Green Phase Results - Part 2](/Users/jacobmccarran_ax/Desktop/Screenshot%202025-09-25%20at%2012.51.26%20PM.png)
+![Green Phase Results - Part 2](green_part2.png)
 *Green Phase Part 2: Final summary showing 7/8 tests passing with quality assessment*
 
 ## Technology Stack
