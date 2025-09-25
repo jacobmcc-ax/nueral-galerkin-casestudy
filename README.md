@@ -114,6 +114,52 @@ neural-galerkin-casestudy/
 
 ## 🔬 Scientific Implementation Details
 
+### PDEs We Solve
+Our implementation focuses on **evolution equations**, particularly the **heat equation** with various initial conditions:
+
+#### 1. Heat Equation (Primary Focus)
+```math
+∂u/∂t = α∇²u + f(x,t)
+```
+
+**1D Form:**
+```math
+∂u/∂t = α ∂²u/∂x² + f(x,t)
+```
+
+**2D Form:**
+```math
+∂u/∂t = α(∂²u/∂x² + ∂²u/∂y²) + f(x,t)
+```
+
+Where:
+- `u(x,t)` or `u(x,y,t)` is the temperature/concentration field
+- `α` is the diffusion coefficient (typically α = 1)
+- `f(x,t)` is the source term
+- Initial condition: `u(x,0) = u₀(x)`
+- Boundary conditions: Homogeneous Dirichlet `u(∂Ω,t) = 0`
+
+#### 2. Example Initial Conditions We Test
+```python
+# Multiple harmonics (smooth)
+u₀(x) = 2sin(πx) + 1.5sin(3πx) + 0.8sin(5πx) + 0.4sin(7πx)
+
+# With discontinuity challenge (step function)
+u₀(x) = [above] + 0.5 * H(x - 0.5)  # H = Heaviside function
+```
+
+#### 3. Analytical Solutions for Validation
+```python
+# Exact solution for heat equation with multiple modes
+u(x,t) = Σ aₖ exp(-k²π²t) sin(kπx)
+
+# For our test case:
+u(x,t) = 2.0·exp(-π²t)·sin(πx) +
+         1.5·exp(-9π²t)·sin(3πx) +
+         0.8·exp(-25π²t)·sin(5πx) +
+         0.4·exp(-49π²t)·sin(7πx)
+```
+
 ### RSNG Algorithm Core
 Our implementation follows the academic paper precisely:
 
