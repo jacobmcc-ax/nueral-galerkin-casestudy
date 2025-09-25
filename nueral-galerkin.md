@@ -39,7 +39,7 @@ u(0, \boldsymbol{x}) & =u_{0}(\boldsymbol{x}) & & \text { for } \boldsymbol{x} \
 
 $$
 
-where $u_{0} \in \mathcal{U}$ is the initial condition and $f$ can include partial derivatives of $u$ to represent PDEs. We focus in this work on Dirichlet and periodic boundary conditions but the following approach![nueral-galerkin_fig_1.png](nueral-galerkin_fig_1.png)
+where $u_{0} \in \mathcal{U}$ is the initial condition and $f$ can include partial derivatives of $u$ to represent PDEs. We focus in this work on Dirichlet and periodic boundary conditions but the following approach![Figure 1](nueral-galerkin_fig_1.png)
 
 Figure 1: We propose Neural Galerkin schemes that update randomized sparse subsets of network parameters with the Dirac-Frenkel variational principle. Randomization avoids overfitting locally in time, which leads to more accurate approximations than dense updates. Sparsity reduces the computational costs of training without losing expressiveness because many parameters are redundant locally in time.
 can be applied with, e.g., Neumann boundary conditions as well [7]. One approach for imposing Dirichlet boundary conditions is by choosing parameterizations that satisfy the boundary conditions by definition [48].
@@ -72,7 +72,7 @@ The choice of the points $\boldsymbol{x}_{1}, \ldots, \boldsymbol{x}_{n}$ is cri
 
 ### 2.2 Problem Formulation 
 
-Challenge 1: Parameters are redundant locally in time. Typically, parameterizations $\hat{u}$ based on deep neural networks lead to Jacobian matrices $J(\boldsymbol{\theta}(t))$ that are low rank in the least-squares problem (4); see, e.g., [37] and Figure 2(a). In our case, a low-rank matrix $J(\boldsymbol{\theta}(t))$ means that components in $\dot{\boldsymbol{\theta}}(t)$ are redundant, because we assume that the samples $\boldsymbol{x}_{1}, \ldots, \boldsymbol{x}_{n}$ are sufficiently rich. Even if $J(\boldsymbol{\theta}(t))$ is low rank and thus the components in $\dot{\boldsymbol{\theta}}(t)$ are redundant, the problem (4) can still be![nueral-galerkin_fig_2.png](nueral-galerkin_fig_2.png)
+Challenge 1: Parameters are redundant locally in time. Typically, parameterizations $\hat{u}$ based on deep neural networks lead to Jacobian matrices $J(\boldsymbol{\theta}(t))$ that are low rank in the least-squares problem (4); see, e.g., [37] and Figure 2(a). In our case, a low-rank matrix $J(\boldsymbol{\theta}(t))$ means that components in $\dot{\boldsymbol{\theta}}(t)$ are redundant, because we assume that the samples $\boldsymbol{x}_{1}, \ldots, \boldsymbol{x}_{n}$ are sufficiently rich. Even if $J(\boldsymbol{\theta}(t))$ is low rank and thus the components in $\dot{\boldsymbol{\theta}}(t)$ are redundant, the problem (4) can still be![Figure 2](nueral-galerkin_fig_2.png)
 
 Figure 2: (a) Jacobians that have low rank locally in time imply that there are redundant parameters in the neural network, which motivates the proposed sparse updates that lead to speedups without losing expressiveness. (b) The residual grows quickly with sequential-in-time training (and dense updates). This is not due to a limitation with the expressiveness of the network because directly fitting the network to solutions indicates that there exist other parameters that can lead to lower residuals. (c) Sequential-in-time training (with dense updates) results in co-adapted neurons as indicated by the highly correlated columns of the $J$ matrix. Plots for experiment with Allen-Cahn equation (Sec. 4).
 solved with standard linear algebra methods such as the singular value decomposition (SVD) because they compress the matrix $J(\boldsymbol{\theta}(t))$ and regularize for, e.g., the minimal-norm solution; however, the costs of performing the SVD to solve (4) scales as $\mathcal{O}\left(n p^{2}\right)$, and thus is quadratic in the number of parameters $p$. This means that a redundancy in $\boldsymbol{\theta}(t)$ of a factor two leads to a $4 \times$ increase in the computational costs. Note that the problem typically is poorly conditioned because $J(\boldsymbol{\theta}(t))$ is low rank, which makes the direct application of iterative solvers challenging.
@@ -208,17 +208,17 @@ All gradients and spatial derivatives are computed with automatic differentiatio
 
 ### 4.2 Results 
 
-RSNG achieves higher accuracy than schemes with dense updates at same computational costs In Figure 3 we plot the relative error over time. The curves corresponding to "dense updates" use a 3 layer network and integration is performed using dense updates. For RSNG, we use a 7 layer network and integrate with sparse updates, setting the number of parameters we update, $s$, equal to the total number of parameters in the 3 layer network and thus equal to the number of parameters that are updated by "dense updates." Thus, the comparison is at a fixed computational cost. The error achieved with RSNG is one to two orders of magnitude below the error obtained with dense updates, across all examples that we consider. In Figure 4(a), we see that as we increase the network size,![nueral-galerkin_fig_3.png](nueral-galerkin_fig_3.png)
+RSNG achieves higher accuracy than schemes with dense updates at same computational costs In Figure 3 we plot the relative error over time. The curves corresponding to "dense updates" use a 3 layer network and integration is performed using dense updates. For RSNG, we use a 7 layer network and integrate with sparse updates, setting the number of parameters we update, $s$, equal to the total number of parameters in the 3 layer network and thus equal to the number of parameters that are updated by "dense updates." Thus, the comparison is at a fixed computational cost. The error achieved with RSNG is one to two orders of magnitude below the error obtained with dense updates, across all examples that we consider. In Figure 4(a), we see that as we increase the network size,![Figure 3](nueral-galerkin_fig_3.png)
 
 Figure 3: We plot the relative error over time for RSNG versus dense updates at $s=757$. We see RSNG leads to orders of magnitude lower errors than dense updates for the same costs.
-![nueral-galerkin_fig_4.png](nueral-galerkin_fig_4.png)
+![Figure 4](nueral-galerkin_fig_4.png)
 
 Figure 4: (a) RSNG benefits from the additional expressiveness of larger networks (larger $p$ ) while only using a fixed number of parameters (fixed $s$ ) at each time step. (b) As we decrease the number of parameters $s$ in the sparse update, but keep the total number of parameters $p$ of the network the same, we achieve lower errors than dense updates. Thus, RSNG outperforms dense updates while incurring lower computational costs. Error bars generated over random sketch matrices, $S_{t}$.
 the relative error decreases as the sparse updates allow us to exploit the greater expressiveness of larger networks while incurring no additional computational cost in computing (9). But we note that increasing the size of the full network will make computations of $J(\boldsymbol{\theta})$ and $\boldsymbol{f}(\boldsymbol{\theta})$ more expensive because of higher costs of computing gradients. However, for the network sizes that we consider in this work, this effect is negligible compared to the cost of solving (9).
 
 RSNG achieves speedups of up to two orders of magnitude In Figure 5(a), we compare the runtime of RSNG to the runtime of a scheme with dense updates that uses a direct solver and to the runtime of a scheme with dense updates that uses an iterative solver as proposed in [16]. The time is computed for Burgers' equation and the sparsity $s$ of RSNG is chosen such that all methods reach a comparable level of error. We find that RSNG is faster than direct solves with dense updates by two orders of magnitude and faster than the iterative solver by one order of magnitude.
 
-The results show that while using an iterative solver as in [16] does speed up the method relative to direct solves with dense updates, it can still be quite slow for networks with many parameters $p$. Additionally, convergence of the iterative method given in [16] requires a number of hyperparameters to be chosen correctly, which may require an expensive search or a priori knowledge about the solution. Note that our RSNG method does not preclude the use of an iterative method to speed up the least-squares solves further.![nueral-galerkin_fig_5.png](nueral-galerkin_fig_5.png)
+The results show that while using an iterative solver as in [16] does speed up the method relative to direct solves with dense updates, it can still be quite slow for networks with many parameters $p$. Additionally, convergence of the iterative method given in [16] requires a number of hyperparameters to be chosen correctly, which may require an expensive search or a priori knowledge about the solution. Note that our RSNG method does not preclude the use of an iterative method to speed up the least-squares solves further.![Figure 5](nueral-galerkin_fig_5.png)
 
 Figure 5: RSNG has lower computational costs than dense updates with direct and iterative leastsquares solvers. Plots for numerical experiment with Burgers' equation
 
@@ -228,9 +228,9 @@ Varying sparsity $s$ at fixed number of total parameters $p$ in network We now s
 
 The high error when performing dense updates $s=p$ in Figure 4(b) for Allen-Cahn and Burgers' equation is due to the overfitting problem described in Section 2.2. As updates become denser, the method is more likely to overfit to regions of the parameter space in which the Jacobian, $J(\boldsymbol{\theta})$, is ill suited for approximating the right-hand side $f$ at future time steps (see Section 2). We can see this explicitly in Figure 6 where we plot the residual over time for sparse and dense updates on the Allen-Cahn equation. Initially, the dense updates lead to a lower residual. This makes sense as they begin at the same region of parameters space. But as the two methods navigate to different regions of parameters space, we see RSNG begins to incur a lower residual relative to dense updates. This indicates that RSNG ameliorates the problem of overfitting and so leads to a lower residual as shown in Figure 6(b).
 
-Comparison with global-in-time methods We compare our method to global-in-time methods which aim to globally minimize the PDE residual over the entire space-time domain. We compare to the original PINN formulation given in [41]. Additionally we compare to a variant termed Causal PINNs, which impose a weak form of time dependence through the loss function [51]. We select this variant as it claims to have state of the art performance among PINNs on problems such as the Allen-Cahn equation. In Table 1, we see that our sequential-in-time RSNG method achieves a higher accuracy by at least one order of magnitude compared to PINNs. Additionally, in terms of computational costs, RSNG outperforms both PINN variants, as their global-in-time training is expensive and requires many residual evaluations. We note that the training time of PINNs is directly![nueral-galerkin_fig_6.png](nueral-galerkin_fig_6.png)
+Comparison with global-in-time methods We compare our method to global-in-time methods which aim to globally minimize the PDE residual over the entire space-time domain. We compare to the original PINN formulation given in [41]. Additionally we compare to a variant termed Causal PINNs, which impose a weak form of time dependence through the loss function [51]. We select this variant as it claims to have state of the art performance among PINNs on problems such as the Allen-Cahn equation. In Table 1, we see that our sequential-in-time RSNG method achieves a higher accuracy by at least one order of magnitude compared to PINNs. Additionally, in terms of computational costs, RSNG outperforms both PINN variants, as their global-in-time training is expensive and requires many residual evaluations. We note that the training time of PINNs is directly![Figure 6](nueral-galerkin_fig_6.png)
 (a) residual at early times
-![nueral-galerkin_fig_7.png](nueral-galerkin_fig_7.png)
+![Figure 7](nueral-galerkin_fig_7.png)
 (b) residual over full time
 
 Figure 6: Plot (a) shows the residual of dense and sparse updates at early time steps. Initially, dense updates must have a lower residual as $J S_{t}$ spans a subspace of the tangent space given by $J$. But in plot (b), we see that after a few time steps, dense updates overfit and the residual grows quicker than with sparse updates.
@@ -334,23 +334,23 @@ Neural Galerkin schemes have been shown to be a useful approach to high dimensio
 The ground truth for the Allen-Cahn and Burgers' equations were generated using a spectral method with a fourth order integrator implemented in the spin solver as part of the Chebfun package in Matlab. We used a spatial grid of 10000 points and time step size of $1 \mathrm{e}-3$.
 The ground truth for the Vlasov equation was generated with a 4th order finite difference scheme in space and an RK4 time integration scheme. We sample $10^{6}$ points over the full 2D space domain and a time step size of $1 \mathrm{e}-3$ was used for time integration.
 In Figure 11,12,13 we show plots of the ground truth solutions at the beginning, middle, and end of integration time for the equations we examine. We can see that they display the characteristics described in Section 4.1.
-![nueral-galerkin_fig_8.png](nueral-galerkin_fig_8.png)
+![Figure 8](nueral-galerkin_fig_8.png)
 
-Figure 7: Decay of singular values of $J(\boldsymbol{\theta}(t))$![nueral-galerkin_fig_9.png](nueral-galerkin_fig_9.png)
+Figure 7: Decay of singular values of $J(\boldsymbol{\theta}(t))$![Figure 9](nueral-galerkin_fig_9.png)
 
 Figure 8: Speedups of RSNG over dense updates with direct and iterative solver.
-![nueral-galerkin_fig_10.png](nueral-galerkin_fig_10.png)
+![Figure 10](nueral-galerkin_fig_10.png)
 
 Figure 9: Speedups of RSNG scale quadratic with sparsity $s$.
-![nueral-galerkin_fig_11.png](nueral-galerkin_fig_11.png)
+![Figure 11](nueral-galerkin_fig_11.png)
 
 Figure 10: Singular values of the Jacobian of the network fit to a Fokker-Planck solution in five dimension decays quickly too; providing indication that our RSNG approach is applicable in these settings as well.
-![nueral-galerkin_fig_12.png](nueral-galerkin_fig_12.png)
+![Figure 12](nueral-galerkin_fig_12.png)
 
-Figure 11: True solution $u(t, x)$ for Allen-Cahn![nueral-galerkin_fig_13.png](nueral-galerkin_fig_13.png)
+Figure 11: True solution $u(t, x)$ for Allen-Cahn![Figure 13](nueral-galerkin_fig_13.png)
 
 Figure 12: True solution $u(t, x)$ for Burgers'
-![nueral-galerkin_fig_14.png](nueral-galerkin_fig_14.png)
+![Figure 14](nueral-galerkin_fig_14.png)
 
 Figure 13: True solution (top) vs RSNG solution (bottom) for Vlasov
 
