@@ -48,3 +48,8 @@ Thumbs.db
 *.tmp
 *.temp
 empty.txt
+
+# Screenshots
+Screenshot*.png
+Screenshot*.jpg
+Screenshot*.jpeg
