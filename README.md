@@ -17,7 +17,7 @@ This project provides a comprehensive implementation of **Randomized Sparse Neur
 
 Our implementation demonstrates **realistic neural network training dynamics** for PDE solving:
 
-![Neural Galerkin Training Metrics](/Users/jacobmccarran_ax/Downloads/nueral-galerkin-casestudy/realistic_training_results/training_metrics_20250925_173614.png)
+![Neural Galerkin Training Metrics](training_showcase.png)
 
 ### Training Performance Highlights
 
