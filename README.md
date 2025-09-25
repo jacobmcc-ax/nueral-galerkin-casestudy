@@ -59,9 +59,6 @@ After PDF to Markdown conversion using Axiomatic Documents MCP:
 **Remaining Issue:**
 - ❌ Mathematical content at 1.6% vs 2.0% threshold (borderline metric)
 
-![Green Phase Results - Part 1](green_part1.png)
-*Green Phase Part 1: Detailed test results showing comprehensive diagnostics*
-
 ![Green Phase Results - Part 2](green_part2.png)
 *Green Phase Part 2: Final summary showing 7/8 tests passing with quality assessment*
 
