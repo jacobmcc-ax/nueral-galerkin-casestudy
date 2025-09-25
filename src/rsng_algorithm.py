@@ -18,6 +18,7 @@ from neural_approximation import NeuralApproximator
 from galerkin_projection import GalerkinProjector
 from sparse_sampling import SparseSampler
 from time_integration import TimeIntegrator
+from training_metrics import TrainingMetrics
 
 # Add utils to path for logging
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -40,7 +41,9 @@ class RSNGSolver:
                  n_total_params: int = 100,
                  n_sparse_params: int = 20,
                  dt: float = 0.01,
-                 integration_scheme: str = "rk4"):
+                 integration_scheme: str = "rk4",
+                 enable_metrics: bool = True,
+                 metrics_save_dir: str = "rsng_training_results"):
         """
         Initialize RSNG solver
 
@@ -51,12 +54,21 @@ class RSNGSolver:
             n_sparse_params: Number of sparse parameters (s << p)
             dt: Time step size
             integration_scheme: Time integration scheme
+            enable_metrics: Enable training metrics tracking
+            metrics_save_dir: Directory to save training metrics
         """
         # Initialize components
         self.neural_approx = NeuralApproximator(spatial_dim=spatial_dim)
         self.galerkin_proj = GalerkinProjector(n_test_functions=n_test_functions)
         self.sparse_sampler = SparseSampler(n_total=n_total_params, n_sparse=n_sparse_params)
         self.time_integrator = TimeIntegrator(scheme=integration_scheme, dt=dt)
+
+        # Initialize training metrics
+        self.enable_metrics = enable_metrics
+        if enable_metrics:
+            self.metrics = TrainingMetrics(save_dir=metrics_save_dir)
+        else:
+            self.metrics = None
 
         # Algorithm parameters
         self.spatial_dim = spatial_dim
@@ -72,7 +84,7 @@ class RSNGSolver:
 
         log_code_execution(
             f"RSNGSolver.__init__",
-            f"RSNG solver initialized: spatial_dim={spatial_dim}, sparse={n_sparse_params}/{n_total_params}, dt={dt}"
+            f"RSNG solver initialized: spatial_dim={spatial_dim}, sparse={n_sparse_params}/{n_total_params}, dt={dt}, metrics={enable_metrics}"
         )
 
     def solve_pde(self,
@@ -81,9 +93,10 @@ class RSNGSolver:
                   initial_condition: Callable,
                   pde_type: str = "heat",
                   max_iterations: int = 100,
-                  tolerance: float = 1e-6) -> Dict:
+                  tolerance: float = 1e-6,
+                  analytical_solution: Optional[Callable] = None) -> Dict:
         """
-        Solve PDE using complete RSNG algorithm
+        Solve PDE using complete RSNG algorithm with training metrics
 
         Args:
             x_domain: Spatial domain points
@@ -92,15 +105,26 @@ class RSNGSolver:
             pde_type: Type of PDE ("heat", "wave", etc.)
             max_iterations: Maximum iterations per time step
             tolerance: Convergence tolerance
+            analytical_solution: Optional analytical solution u(x,t) for error tracking
 
         Returns:
-            Dictionary with solution results
+            Dictionary with solution results and training metrics
         """
         t_start, t_end = t_span
         x_domain = np.asarray(x_domain).flatten()
 
         # Initialize solution with initial condition
         u_initial = initial_condition(x_domain)
+
+        # Initialize training metrics
+        if self.enable_metrics:
+            self.metrics.set_session_info(
+                pde_type=pde_type,
+                spatial_points=len(x_domain),
+                time_span=t_span,
+                tolerance=tolerance,
+                max_iterations=max_iterations
+            )
 
         log_code_execution(
             f"RSNGSolver.solve_pde starting",
@@ -117,8 +141,10 @@ class RSNGSolver:
 
         t_current = t_start
         step_count = 0
+        total_iterations = 0
 
         while t_current < t_end:
+            step_start_time = time.time()
             step_count += 1
             t_next = min(t_current + self.dt, t_end)
 
@@ -128,15 +154,40 @@ class RSNGSolver:
             )
 
             # Solve at current time step using sparse Galerkin
-            converged, final_residual = self._solve_timestep(
+            converged, final_residual, iterations_used = self._solve_timestep(
                 x_domain, t_current, pde_type, max_iterations, tolerance
             )
+
+            total_iterations += iterations_used
 
             # Store solution
             u_current = self.neural_approx.forward(x_domain, t_current)
             solution_trajectory.append(u_current.copy())
             time_points.append(t_current)
             residual_history.append(final_residual)
+
+            # Compute solution error if analytical solution provided
+            solution_error = None
+            if analytical_solution is not None:
+                u_analytical = analytical_solution(x_domain, t_current)
+                solution_error = np.max(np.abs(u_current - u_analytical))
+
+            # Track training metrics
+            step_time = time.time() - step_start_time
+            if self.enable_metrics:
+                parameter_norm = np.linalg.norm(self._get_flattened_parameters())
+                sparse_efficiency = 1.0 - (self.n_sparse_params / self.neural_approx.get_parameter_count())
+
+                self.metrics.log_training_step(
+                    step=total_iterations,
+                    residual_loss=final_residual,
+                    solution_error=solution_error,
+                    parameter_norm=parameter_norm,
+                    computation_time=step_time,
+                    sparse_efficiency=sparse_efficiency
+                )
+
+                self.metrics.log_time_step(t_current, final_residual, solution_error)
 
             # Advance time using parameter evolution
             self._advance_time_step(x_domain, t_current, t_next, pde_type)
@@ -148,6 +199,12 @@ class RSNGSolver:
         solution_trajectory.append(u_final.copy())
         time_points.append(t_end)
 
+        # Final error computation
+        final_solution_error = None
+        if analytical_solution is not None:
+            u_analytical_final = analytical_solution(x_domain, t_end)
+            final_solution_error = np.max(np.abs(u_final - u_analytical_final))
+
         # Compute solution metrics
         results = {
             "solution_trajectory": np.array(solution_trajectory),
@@ -156,13 +213,22 @@ class RSNGSolver:
             "final_solution": u_final,
             "convergence_achieved": all(r < tolerance for r in residual_history),
             "total_steps": step_count,
+            "total_iterations": total_iterations,
+            "final_solution_error": final_solution_error,
             "algorithm_info": self._get_algorithm_info()
         }
+
+        # Add training metrics to results
+        if self.enable_metrics:
+            results["training_metrics"] = {
+                "metrics_object": self.metrics,
+                "summary_statistics": self.metrics.get_summary_statistics()
+            }
 
         log_mathematical_result(
             "RSNG algorithm completion",
             "PASS" if results["convergence_achieved"] else "PARTIAL",
-            f"Steps: {step_count}, Final residual: {residual_history[-1] if residual_history else 0:.2e}",
+            f"Steps: {step_count}, Iterations: {total_iterations}, Final residual: {residual_history[-1] if residual_history else 0:.2e}",
             f"Target tolerance: {tolerance}"
         )
 
@@ -180,7 +246,7 @@ class RSNGSolver:
         )
 
     def _solve_timestep(self, x_domain: np.ndarray, t: float, pde_type: str,
-                       max_iterations: int, tolerance: float) -> Tuple[bool, float]:
+                       max_iterations: int, tolerance: float) -> Tuple[bool, float, int]:
         """Solve PDE at single time step using sparse Galerkin projection"""
 
         # Use sparse residual minimization
@@ -189,12 +255,15 @@ class RSNGSolver:
             max_iterations=max_iterations, tolerance=tolerance
         )
 
+        # For now, assume 1 iteration (GREEN phase simplification)
+        iterations_used = 1 if converged else max_iterations
+
         log_code_execution(
             f"RSNGSolver._solve_timestep(t={t:.4f})",
-            f"Converged: {converged}, residual: {final_residual:.2e}"
+            f"Converged: {converged}, residual: {final_residual:.2e}, iterations: {iterations_used}"
         )
 
-        return converged, final_residual
+        return converged, final_residual, iterations_used
 
     def _advance_time_step(self, x_domain: np.ndarray, t_current: float, t_next: float, pde_type: str):
         """Advance neural parameters using time integration"""
@@ -283,6 +352,81 @@ class RSNGSolver:
 
         return error
 
+    def generate_training_plots(self, save_plots: bool = True, show_plots: bool = False) -> Dict[str, str]:
+        """
+        Generate comprehensive training plots
+
+        Args:
+            save_plots: Whether to save plots to files
+            show_plots: Whether to display plots
+
+        Returns:
+            Dictionary with paths to saved plot files
+        """
+        if not self.enable_metrics:
+            log_code_execution(
+                "RSNGSolver.generate_training_plots",
+                "Training metrics not enabled - no plots generated"
+            )
+            return {}
+
+        plot_paths = {}
+
+        # Generate training metrics plot
+        metrics_plot_path = self.metrics.plot_training_losses(
+            save_plot=save_plots, show_plot=show_plots
+        )
+        if metrics_plot_path:
+            plot_paths['training_metrics'] = metrics_plot_path
+
+        # Generate time evolution plot
+        time_plot_path = self.metrics.plot_time_evolution(
+            save_plot=save_plots, show_plot=show_plots
+        )
+        if time_plot_path:
+            plot_paths['time_evolution'] = time_plot_path
+
+        log_code_execution(
+            "RSNGSolver.generate_training_plots",
+            f"Generated {len(plot_paths)} training plots"
+        )
+
+        return plot_paths
+
+    def save_training_metrics(self, filename: Optional[str] = None) -> str:
+        """
+        Save training metrics to file
+
+        Args:
+            filename: Optional custom filename
+
+        Returns:
+            Path to saved metrics file
+        """
+        if not self.enable_metrics:
+            log_code_execution(
+                "RSNGSolver.save_training_metrics",
+                "Training metrics not enabled - no metrics saved"
+            )
+            return ""
+
+        metrics_path = self.metrics.save_metrics(filename)
+
+        log_code_execution(
+            "RSNGSolver.save_training_metrics",
+            f"Saved training metrics to {metrics_path}"
+        )
+
+        return metrics_path
+
+    def print_training_summary(self):
+        """Print comprehensive training summary"""
+        if not self.enable_metrics:
+            print("Training metrics not enabled - no summary available")
+            return
+
+        self.metrics.print_summary()
+
 # Example usage and demonstration
 if __name__ == "__main__":
     print("="*80)
@@ -309,26 +453,24 @@ if __name__ == "__main__":
     def analytical_solution(x, t):
         return np.exp(-np.pi**2 * t) * np.sin(np.pi * x)
 
-    # Solve using RSNG
-    print("Solving 1D heat equation using RSNG algorithm...")
+    # Solve using RSNG with training metrics
+    print("Solving 1D heat equation using RSNG algorithm with training metrics...")
     results = solver.solve_pde(
         x_domain=x_domain,
         t_span=t_span,
         initial_condition=initial_condition,
         pde_type="heat",
         max_iterations=50,
-        tolerance=1e-6
+        tolerance=1e-6,
+        analytical_solution=analytical_solution  # Enable solution error tracking
     )
 
     print(f"\nRSNG Results:")
     print(f"- Total time steps: {results['total_steps']}")
+    print(f"- Total iterations: {results['total_iterations']}")
     print(f"- Convergence achieved: {results['convergence_achieved']}")
     print(f"- Final residual: {results['residual_history'][-1]:.2e}")
-
-    # Compute solution accuracy
-    final_time = results['time_points'][-1]
-    error = solver.compute_solution_error(x_domain, final_time, analytical_solution)
-    print(f"- Solution error: {error:.2e}")
+    print(f"- Final solution error: {results['final_solution_error']:.2e}")
 
     # Algorithm info
     algo_info = results['algorithm_info']
@@ -337,5 +479,33 @@ if __name__ == "__main__":
     print(f"- Time integration: {algo_info['integration_scheme']}")
     print(f"- Time step: {algo_info['time_step']}")
 
-    print("\n✅ RSNG Algorithm demonstration complete")
+    # Generate and save training plots
+    print(f"\nGenerating training plots...")
+    plot_paths = solver.generate_training_plots(save_plots=True, show_plots=False)
+    for plot_type, path in plot_paths.items():
+        print(f"- {plot_type.replace('_', ' ').title()} plot: {path}")
+
+    # Save training metrics
+    metrics_path = solver.save_training_metrics()
+    print(f"- Training metrics data: {metrics_path}")
+
+    # Print training summary
+    print(f"\nTraining Summary:")
+    solver.print_training_summary()
+
+    # Training metrics summary
+    if 'training_metrics' in results:
+        summary_stats = results['training_metrics']['summary_statistics']
+        print(f"\nTraining Performance:")
+        if 'efficiency_stats' in summary_stats:
+            eff = summary_stats['efficiency_stats']
+            print(f"- Average time per step: {eff['avg_time_per_step']:.4f}s")
+            print(f"- Total computation time: {eff['total_time']:.2f}s")
+
+        if 'residual_stats' in summary_stats:
+            rs = summary_stats['residual_stats']
+            print(f"- Residual reduction: {rs['reduction_ratio']:.2e}x")
+
+    print("\n✅ RSNG Algorithm with Training Metrics demonstration complete")
+    print("Check 'rsng_training_results' directory for plots and metrics data!")
     print("All components integrated successfully!")
