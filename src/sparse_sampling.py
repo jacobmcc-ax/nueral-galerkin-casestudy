@@ -126,8 +126,16 @@ class SparseSampler:
         # Get selector matrix
         S_t = self.create_selector_matrix(seed=seed)
 
+        # Check for numerical issues in sparse update
+        if not np.isfinite(sparse_update).all():
+            sparse_update = np.nan_to_num(sparse_update, nan=0.0, posinf=1e6, neginf=-1e6)
+
         # Map sparse to full: θ̇ = S_t @ θ̇_s
         full_update = S_t @ sparse_update
+
+        # Check for numerical issues in full update
+        if not np.isfinite(full_update).all():
+            full_update = np.nan_to_num(full_update, nan=0.0, posinf=1e6, neginf=-1e6)
 
         log_code_execution(
             f"SparseSampler.map_sparse_to_full(sparse_dim={len(sparse_update)})",
@@ -152,9 +160,7 @@ class SparseSampler:
         """
         x = np.asarray(x).flatten()
 
-        # GREEN PHASE: Create sparse system directly without full computation for efficiency
-        # This simulates the theoretical sparse advantage
-
+        # Compute actual sparse Galerkin system
         # Get parameter count for proper selector matrix
         n_params = neural_approximator.get_parameter_count()
 
@@ -162,14 +168,44 @@ class SparseSampler:
         sampler_adjusted = SparseSampler(n_total=n_params, n_sparse=self.n_sparse)
         S_t = sampler_adjusted.create_selector_matrix(seed=42)
 
-        # GREEN PHASE: Create sparse system directly (simulating efficiency)
-        # In real implementation, this would involve sparse matrix operations
-        sparse_system = np.random.randn(self.n_sparse, self.n_sparse)
-        sparse_system = sparse_system.T @ sparse_system  # Make positive definite
-        sparse_system += 1e-6 * np.eye(self.n_sparse)  # Regularization
+        # Compute full Jacobian matrix
+        full_jacobian = projector.compute_jacobian(neural_approximator, x, t)
 
-        # Create corresponding RHS
-        sparse_rhs = np.random.randn(self.n_sparse) * 1e-3
+        # Check for numerical issues in Jacobian
+        if not np.isfinite(full_jacobian).all():
+            full_jacobian = np.nan_to_num(full_jacobian, nan=0.0, posinf=1e10, neginf=-1e10)
+
+        # Apply sparse selection: J_s = J @ S_t (select columns)
+        sparse_jacobian = full_jacobian @ S_t
+
+        # Check for numerical issues after sparse selection
+        if not np.isfinite(sparse_jacobian).all():
+            sparse_jacobian = np.nan_to_num(sparse_jacobian, nan=0.0, posinf=1e10, neginf=-1e10)
+
+        # Compute sparse system: S_t^T @ J^T @ J @ S_t with numerical stability
+        sparse_system = sparse_jacobian.T @ sparse_jacobian
+
+        # Check for numerical issues in system matrix
+        if not np.isfinite(sparse_system).all():
+            sparse_system = np.nan_to_num(sparse_system, nan=0.0, posinf=1e10, neginf=-1e10)
+
+        # Compute current residual for RHS
+        current_residual = projector.compute_weak_residual(x, t, neural_approximator, "heat")
+
+        # Check for numerical issues in residual
+        if not np.isfinite(current_residual).all():
+            current_residual = np.nan_to_num(current_residual, nan=0.0, posinf=1e10, neginf=-1e10)
+
+        # Compute sparse RHS: S_t^T @ J^T @ residual
+        sparse_rhs = sparse_jacobian.T @ current_residual
+
+        # Check for numerical issues in RHS
+        if not np.isfinite(sparse_rhs).all():
+            sparse_rhs = np.nan_to_num(sparse_rhs, nan=0.0, posinf=1e10, neginf=-1e10)
+
+        # Add stronger regularization for numerical stability
+        regularization = max(1e-8, 1e-6 * np.max(np.abs(sparse_system)))
+        sparse_system += regularization * np.eye(self.n_sparse)
 
         log_code_execution(
             f"SparseSampler.sparse_galerkin_projection()",
@@ -197,9 +233,8 @@ class SparseSampler:
         x = np.asarray(x).flatten()
 
         for iteration in range(max_iterations):
-            # Compute current residual (full space)
-            u_current = neural_approximator.forward(x, t)
-            residual = projector.compute_weak_residual(x, t, u_current, "heat")
+            # Compute current residual using actual neural network
+            residual = projector.compute_weak_residual(x, t, neural_approximator, "heat")
             residual_norm = np.linalg.norm(residual)
 
             # Check convergence
@@ -243,9 +278,8 @@ class SparseSampler:
                 # If solve fails, break
                 break
 
-        # Final residual check
-        u_final = neural_approximator.forward(x, t)
-        final_residual = np.linalg.norm(projector.compute_weak_residual(x, t, u_final, "heat"))
+        # Final residual check using actual neural network
+        final_residual = np.linalg.norm(projector.compute_weak_residual(x, t, neural_approximator, "heat"))
 
         log_code_execution(
             f"SparseSampler.sparse_minimize_residual completed {max_iterations} iterations",
